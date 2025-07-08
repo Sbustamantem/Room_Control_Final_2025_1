@@ -3,6 +3,8 @@
 #include "ssd1306_fonts.h"
 #include "stm32l4xx_hal.h"
 #include "stm32l4xx_hal_adc.h"
+#include "stm32l4xx_hal_gpio.h"
+#include "stm32l4xx_hal_rcc.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -20,7 +22,10 @@ static const uint32_t ACCESS_DENIED_TIMEOUT_MS = 3000;  // 3 seconds
 
 
 //ADC configuration With PA0 as input
-
+/**
+* @brief ADC initialization function
+* @retval None
+*/  
 ADC_HandleTypeDef hadc1;
 void Room_ADC_Init(void)
 {
@@ -84,7 +89,11 @@ void room_control_init(room_control_t *room) {
     // TODO: TAREA - Initialize hardware (door lock, fan PWM, etc.)
     // Ejemplo: HAL_GPIO_WritePin(DOOR_STATUS_GPIO_Port, DOOR_STATUS_Pin, GPIO_PIN_RESET);
 }
-
+/**
+* @brief Change the current state of the room control system
+ * @param room Pointer to the room control structure
+ * @param new_state The new state to transition to
+ */   
 void room_control_update(room_control_t *room) {
     uint32_t current_time = HAL_GetTick();
     
@@ -105,10 +114,7 @@ void room_control_update(room_control_t *room) {
             break;
             
         case ROOM_STATE_INPUT_PASSWORD:
-            // TODO: TAREA - Implementar lógica de entrada de contraseña
-            // - Mostrar asteriscos en pantalla (**)
-            // - Manejar timeout (volver a LOCKED después de 10 segundos sin input)
-            // - Verificar contraseña cuando se ingresen 4 dígitos
+            // Check if input buffer is password length
             if (room->input_index >= 4) {
                 // Compare input with stored password
                 if (memcmp(room->input_buffer, room->password, 4) == 0) {
@@ -157,6 +163,10 @@ void room_control_update(room_control_t *room) {
     }
 }
 
+/**
+ * @brief Clear the input buffer and reset index
+ * @param room Pointer to the room control structure
+ */ 
 void room_control_process_key(room_control_t *room, char key) {
     room->last_input_time = HAL_GetTick();
     
@@ -236,15 +246,20 @@ bool room_control_is_door_locked(room_control_t *room) {
 fan_level_t room_control_get_fan_level(room_control_t *room) {
     return room->current_fan_level;
 }
-
+ 
+/**
+    * @brief Get the current temperature from the ADC
+    * @param room Pointer to the room control structure
+    * @return Current temperature in Celsius
+*/
 float room_control_get_temperature(room_control_t *room) {
         // Read temperature from ADC
         HAL_ADC_Start(&hadc1);
         HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
         uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
         HAL_ADC_Stop(&hadc1);
-        // Convert ADC value to temperature (assuming 3.3V reference and 12-bit resolution)
-        room->current_temperature = (adc_value * 3.3f / 4095.0f) * 100.0f; // Example conversion
+        // Convert ADC value to temperature 
+        room->current_temperature = (adc_value * 3.3f / 4095.0f) * 100.0f; // LM35 conversion
     return room->current_temperature;
 }
 
@@ -274,6 +289,11 @@ static void room_control_change_state(room_control_t *room, room_state_t new_sta
             break;
     }
 }
+
+/**
+ * @brief Update the display based on the current state
+ * @param room Pointer to the room control structure
+ */
 
 static void room_control_update_display(room_control_t *room) {
     char display_buffer[32];
@@ -307,7 +327,7 @@ static void room_control_update_display(room_control_t *room) {
             ssd1306_SetCursor(10, 20);
             ssd1306_WriteString("CONCEDIDO", Font_7x10, White);
             
-            snprintf(display_buffer, sizeof(display_buffer), "Temp: %.1fC", room->current_temperature);
+            snprintf(display_buffer, sizeof(display_buffer), "Temp: %dC", (int)room->current_temperature);
             ssd1306_SetCursor(10, 30);
             ssd1306_WriteString(display_buffer, Font_7x10, White);
             
@@ -330,6 +350,11 @@ static void room_control_update_display(room_control_t *room) {
     ssd1306_UpdateScreen();
 }
 
+/**
+ * @brief Update the door status based on the current state
+ * @param room Pointer to the room control structure
+ */
+
 static void room_control_update_door(room_control_t *room) {
     // TODO: TAREA - Implementar control físico de la puerta
     // Ejemplo usando el pin DOOR_STATUS:
@@ -339,22 +364,34 @@ static void room_control_update_door(room_control_t *room) {
         HAL_GPIO_WritePin(DOOR_STATUS_GPIO_Port, DOOR_STATUS_Pin, GPIO_PIN_SET);
     }
 }
-
+/**
+ * @brief Update the fan level based on the current temperature
+ * @param room Pointer to the room control structure
+ */
 static void room_control_update_fan(room_control_t *room) {
-    switch (room_control_calculate_fan_level(room->current_temperature)) {
+    switch (room_control_calculate_fan_level(room_control_get_temperature(room))) {
     case FAN_LEVEL_OFF:
        room->current_fan_level = FAN_LEVEL_OFF;
         break;
     case FAN_LEVEL_LOW:
         room->current_fan_level = FAN_LEVEL_LOW;
+        break;
     case FAN_LEVEL_MED:
         room->current_fan_level = FAN_LEVEL_MED;
+        break;
     case FAN_LEVEL_HIGH:
         room->current_fan_level = FAN_LEVEL_HIGH;
+        break;
     default:
         break;
     }
 }
+
+/**
+ * @brief Calculate the fan level based on the current temperature
+ * @param temperature Current temperature in Celsius
+ * @return Fan level enumeration value
+ */
 
 static fan_level_t room_control_calculate_fan_level(float temperature) {
     // TODO: TAREA - Implementar lógica de niveles de ventilador
