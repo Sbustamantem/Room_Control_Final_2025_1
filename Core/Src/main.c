@@ -26,7 +26,6 @@
 #include "ring_buffer.h"
 #include "room_control.h"
 #include <stdio.h>
-
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 
@@ -49,7 +48,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
-
 TIM_HandleTypeDef htim3;
 DMA_HandleTypeDef hdma_tim3_ch1_trig;
 
@@ -165,15 +163,12 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  led_init(&heartbeat_led);
-  ssd1306_Init();
-  HAL_UART_Receive_IT(&huart2, &usart_2_rxbyte, 1);
   
   ring_buffer_init(&keypad_rb, keypad_buffer, KEYPAD_BUFFER_LEN);
   keypad_init(&keypad);
   
   // TODO: TAREA - Descomentar cuando implementen la lógica del sistema
-  // room_control_init(&room_system);
+  room_control_init(&room_system);
 
   /* USER CODE END 2 */
 
@@ -188,18 +183,37 @@ int main(void)
   HAL_UART_Transmit(&huart2, (uint8_t *)"Hello, 4100901!\r\n", 17, HAL_MAX_DELAY);
   while (1) {
     heartbeat(); // Call the heartbeat function to toggle the LED
+    room_control_update(&room_system);
+    switch (room_control_get_fan_level(&room_system))
+    {
+      case FAN_LEVEL_OFF:
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0); // Set PWM to 0% for OFF
+        break;
 
-    // TODO: TAREA - Descomentar cuando implementen la máquina de estados
-    // room_control_update(&room_system);
+      case FAN_LEVEL_LOW:
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 30); // Set PWM to 30% for LOW
+        break;
+
+      case FAN_LEVEL_MED:
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 70); // Set PWM to 70% for MED
+        break;
+
+      case FAN_LEVEL_HIGH:
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 100); // Set PWM to 100% for HIGH
+        break;
+
+      default:
+        break;
+    }
+    room_control_get_temperature(&room_system); // Read the temperature sensor
+
+    
 
     // DEMO: Keypad functionality - Remove when implementing room control logic
     if (keypad_interrupt_pin != 0) {
       char key = keypad_scan(&keypad, keypad_interrupt_pin);
       if (key != '\0') {
-        write_to_oled(&key, White, 31, 31);
-        
-        // TODO: TAREA - Descomentar para enviar teclas al sistema de control
-        // room_control_process_key(&room_system, key);
+        room_control_process_key(&room_system, key);
       }
       keypad_interrupt_pin = 0;
     }
@@ -464,20 +478,20 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : KEYPAD_C1_Pin */
   GPIO_InitStruct.Pin = KEYPAD_C1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(KEYPAD_C1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : KEYPAD_C4_Pin */
   GPIO_InitStruct.Pin = KEYPAD_C4_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(KEYPAD_C4_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : KEYPAD_C2_Pin KEYPAD_C3_Pin */
   GPIO_InitStruct.Pin = KEYPAD_C2_Pin|KEYPAD_C3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : KEYPAD_R2_Pin KEYPAD_R4_Pin KEYPAD_R3_Pin */

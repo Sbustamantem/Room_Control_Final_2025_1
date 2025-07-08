@@ -4,6 +4,7 @@
 #include "main.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "stm32l4xx_hal.h"
 
 #define PASSWORD_LENGTH 4
 #define MAX_TEMP_READINGS 5
@@ -38,7 +39,6 @@ typedef struct {
     float current_temperature;
     fan_level_t current_fan_level;
     bool manual_fan_override;
-    
     // Display update flags
     bool display_update_needed;
 } room_control_t;
